@@ -1,21 +1,22 @@
 FROM python:3.10-slim
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Install system dependencies (use libpcre2-dev instead of libpcre3-dev)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     gcc \
-    libpcre3-dev \
+    libpcre2-dev \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # Install pipenv
-RUN pip install pipenv
+RUN pip install --no-cache-dir pipenv
 
 # Copy dependency files
 COPY Pipfile* ./
 
-# Install dependencies
+# Install Python dependencies
 RUN pipenv install --system --deploy --ignore-pipfile
 
 # Copy application code
