@@ -1,0 +1,71 @@
+name: Backend Continuous Deployment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'starter/backend/**'
+  workflow_dispatch:
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install pipenv
+        run: pip install pipenv
+
+      - name: Lint
+        run: |
+          cd starter/backend
+          pipenv install --dev
+          pipenv run lint
+
+      - name: Test
+        run: |
+          cd starter/backend
+          pipenv install --dev
+          pipenv run test
+
+  build-and-deploy:
+    needs: lint-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & Push Docker Image
+        run: |
+          cd starter/backend
+          IMAGE_TAG=${{ github.sha }}
+          docker build -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/mp-backend:${IMAGE_TAG} .
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/mp-backend:${IMAGE_TAG}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name cluster --region us-east-1
+
+      - name: Deploy to EKS
+        run: |
+          cd starter/backend/k8s
+          IMAGE_TAG=${{ github.sha }}
+          kustomize edit set image backend=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/mp-backend:${IMAGE_TAG}
+          kustomize build | kubectl apply -f -
