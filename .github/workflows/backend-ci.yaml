@@ -99,3 +99,4 @@ jobs:
 
       - name: Build docker image
         run: docker build --tag mp-backend:${{ github.sha }} .
+        run: docker build --tag mp-backend:${{ github.sha }} starter/backend
